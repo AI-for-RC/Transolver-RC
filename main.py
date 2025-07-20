@@ -8,6 +8,7 @@ from model_dict import get_model
 from utils.testloss import TestLoss
 
 # --gpu 0 --model Transolver_Structured_Mesh_3D --n-hidden 128 --n-heads 8 --n-layers 8 --lr 0.001 --max_grad_norm 0.1 --batch-size 4 --slice_num 64 --eval 0 --save_name RC_Transolver
+# add
 
 parser = argparse.ArgumentParser('Training Transformer')
 
