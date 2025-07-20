@@ -7,8 +7,7 @@ from tqdm import *
 from model_dict import get_model
 from utils.testloss import TestLoss
 
-# --gpu 0 --model Transolver_Structured_Mesh_3D --n-hidden 128 --n-heads 8 --n-layers 8 --lr 0.001 --max_grad_norm 0.1 --batch-size 4 --slice_num 64 --eval 0 --save_name RC_Transolver
-# add
+# --gpu 0 --model Transolver_Structured_Mesh_3D --n-hidden 128 --n-heads 8 --n-layers 8 --lr 0.001 --epochs 100 --max_grad_norm 0.1 --batch-size 4 --slice_num 64 --eval 0 --save_name RC_Transolver --log_name train_log.txt
 
 parser = argparse.ArgumentParser('Training Transformer')
 
@@ -28,6 +27,7 @@ parser.add_argument('--slice_num', type=int, default=32)
 parser.add_argument('--eval', type=int, default=0)
 parser.add_argument('--save_name', type=str, default='RC_Transolver')
 parser.add_argument('--data_path', type=str, default='./data')
+parser.add_argument('--log_name', type=str, default='train_log.txt')
 args = parser.parse_args()
 eval = args.eval
 save_name = args.save_name
@@ -144,6 +144,15 @@ def main():
     else:
         epoch_pbar = tqdm(range(args.epochs), desc="Training Progress", position=0)
         
+        log_dir = './log'
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        log_path = os.path.join(log_dir, args.log_name)
+        with open(log_path, 'w', encoding='utf-8') as f:
+            for arg, value in vars(args).items():
+                f.write(f"{arg}: {value}\n")
+            f.write("\nEpoch\tTrain Loss\tTest Error\n")
+
         for ep in epoch_pbar:
             model.train()
             train_loss = 0
@@ -183,7 +192,7 @@ def main():
 
             epoch_pbar.set_postfix({
                 'Train Loss': f'{train_loss/len(train_loader):.6f}',
-                'Test Error': f'{rel_err:.6f}'
+                'Test Error': f'{rel_err:.6f}',
             })
             
             print(f"\nEpoch {ep+1}/{args.epochs} - Train Loss: {train_loss/len(train_loader):.6f}, Test Error: {rel_err:.6f}")
@@ -193,6 +202,10 @@ def main():
                     os.makedirs('./checkpoints')
                 print('save model')
                 torch.save(model.state_dict(), os.path.join('./checkpoints', save_name + '.pt'))
+
+            # 每个epoch都写一行日志
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(f"{ep+1}\t{train_loss/len(train_loader):.6f}\t{rel_err:.6f}\n")
 
         if not os.path.exists('./checkpoints'):
             os.makedirs('./checkpoints')
