@@ -7,7 +7,7 @@ from tqdm import *
 from model_dict import get_model
 from utils.testloss import TestLoss
 
-# --gpu 0 --model Transolver_Structured_Mesh_3D --n-hidden 128 --n-heads 8 --n-layers 8 --lr 0.001 --epochs 100 --max_grad_norm 0.1 --batch-size 4 --slice_num 64 --eval 0 --save_name RC_Transolver --log_name train_log.txt
+# --gpu 0 --model Transolver_Structured_Mesh_3D --n-hidden 128 --n-heads 8 --n-layers 8 --lr 0.001 --epochs 100 --max_grad_norm 0.1 --batch-size 32 --slice_num 64 --eval 0 --save_name 1 --log_name 1.txt
 
 parser = argparse.ArgumentParser('Training Transformer')
 
@@ -116,7 +116,7 @@ def main():
 
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, epochs=args.epochs,
                                                     steps_per_epoch=len(train_loader))
-    myloss = TestLoss(size_average=False)
+    myloss = TestLoss()
 
     if eval:
         model.load_state_dict(torch.load("./checkpoints/" + save_name + ".pt"))
@@ -203,7 +203,6 @@ def main():
                 print('save model')
                 torch.save(model.state_dict(), os.path.join('./checkpoints', save_name + '.pt'))
 
-            # 每个epoch都写一行日志
             with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(f"{ep+1}\t{train_loss/len(train_loader):.6f}\t{rel_err:.6f}\n")
 
