@@ -7,7 +7,8 @@ from tqdm import *
 from model_dict import get_model
 from utils.testloss import TestLoss
 
-# --gpu 0 --model Transolver_Structured_Mesh_3D --n-hidden 128 --n-heads 8 --n-layers 8 --lr 0.001 --epochs 100 --max_grad_norm 0.1 --batch-size 32 --slice_num 64 --eval 0 --resume 1 --save_name 1 --log_name 1.txt --resume_name 1
+# --gpu 0 --model Transolver_Structured_Mesh_3D --n-hidden 128 --n-heads 8 --n-layers 8 --lr 0.001 --epochs 10 --max_grad_norm 0.1 --batch-size 32 --slice_num 64 --eval 0 --resume 1 --save_name 1.1 --log_name 1.1 --resume_name 1
+# --gpu 0 --model Transolver_Structured_Mesh_3D --n-hidden 128 --n-heads 8 --n-layers 8 --lr 0.001 --epochs 10 --max_grad_norm 0.1 --batch-size 32 --slice_num 64 --eval 0 --resume 0 --save_name 1 --log_name 1
 
 parser = argparse.ArgumentParser('Training Transformer')
 
@@ -145,20 +146,32 @@ def main():
         rel_err /= ntest
         print(f"Test Error: {rel_err:.6f}")
     else:
+        epochs = args.epochs
         if args.resume:
             checkpoint_path = os.path.join('./checkpoints', args.resume_name + '.pt')
+            checkpoint = torch.load(checkpoint_path)
             if os.path.exists(checkpoint_path):
                 print(f"Resuming training from {checkpoint_path}")
-                model.load_state_dict(torch.load(checkpoint_path))
+                model.load_state_dict(checkpoint['model_state_dict'])
+                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                    optimizer,
+                    max_lr=args.lr,
+                    epochs=checkpoint['epoch'] + args.epochs,
+                    steps_per_epoch=len(train_loader),
+                    last_epoch=checkpoint['epoch']
+                )
             else:
                 print(f"No checkpoint found at {checkpoint_path}, training from scratch.")
-
-        epoch_pbar = tqdm(range(args.epochs), desc="Training Progress", position=0)
+            epoch_pbar = tqdm(range(checkpoint['epoch'], checkpoint['epoch'] + args.epochs), desc="Training Progress", position=0)
+            epochs = checkpoint['epoch'] + args.epochs
+        else:
+            epoch_pbar = tqdm(range(args.epochs), desc="Training Progress", position=0)
         
         log_dir = './log'
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
-        log_path = os.path.join(log_dir, args.log_name)
+        log_path = os.path.join(log_dir, args.log_name + ".txt")
         with open(log_path, 'w', encoding='utf-8') as f:
             for arg, value in vars(args).items():
                 f.write(f"{arg}: {value}\n")
@@ -168,7 +181,7 @@ def main():
             model.train()
             train_loss = 0
 
-            batch_pbar = tqdm(train_loader, desc=f"Epoch {ep+1}/{args.epochs}", 
+            batch_pbar = tqdm(train_loader, desc=f"Epoch {ep+1}/{epochs}", 
                              position=1, leave=False)
             
             for x1, x2, y in batch_pbar:
@@ -206,13 +219,18 @@ def main():
                 'Test Error': f'{rel_err:.6f}',
             })
             
-            print(f"\nEpoch {ep+1}/{args.epochs} - Train Loss: {train_loss/len(train_loader):.6f}, Test Error: {rel_err:.6f}")
+            print(f"\nEpoch {ep+1}/{epochs} - Train Loss: {train_loss/len(train_loader):.6f}, Test Error: {rel_err:.6f}")
 
-            if ep % 100 == 0:
+            if (ep + 1) % 100 == 0:
                 if not os.path.exists('./checkpoints'):
                     os.makedirs('./checkpoints')
                 print('save model')
-                torch.save(model.state_dict(), os.path.join('./checkpoints', save_name + '.pt'))
+                torch.save({
+                    'epoch': ep,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
+                }, os.path.join('./checkpoints', save_name + '.pt'))
 
             with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(f"{ep+1}\t{train_loss/len(train_loader):.6f}\t{rel_err:.6f}\n")
@@ -220,7 +238,12 @@ def main():
         if not os.path.exists('./checkpoints'):
             os.makedirs('./checkpoints')
         print('save model')
-        torch.save(model.state_dict(), os.path.join('./checkpoints', save_name + '.pt'))
+        torch.save({
+            'epoch': epochs,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+        }, os.path.join('./checkpoints', save_name + '.pt'))
 
 if __name__ == "__main__":
     main()
