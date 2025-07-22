@@ -7,7 +7,7 @@ from tqdm import *
 from model_dict import get_model
 from utils.testloss import TestLoss
 
-# --gpu 0 --model Transolver_Structured_Mesh_3D --n-hidden 128 --n-heads 8 --n-layers 8 --lr 0.001 --epochs 100 --max_grad_norm 0.1 --batch-size 32 --slice_num 64 --eval 0 --save_name 1 --log_name 1.txt
+# --gpu 0 --model Transolver_Structured_Mesh_3D --n-hidden 128 --n-heads 8 --n-layers 8 --lr 0.001 --epochs 100 --max_grad_norm 0.1 --batch-size 32 --slice_num 64 --eval 0 --resume 1 --save_name 1 --log_name 1.txt --resume_name 1
 
 parser = argparse.ArgumentParser('Training Transformer')
 
@@ -25,9 +25,12 @@ parser.add_argument('--mlp_ratio', type=int, default=1)
 parser.add_argument('--dropout', type=float, default=0.0)
 parser.add_argument('--slice_num', type=int, default=32)
 parser.add_argument('--eval', type=int, default=0)
+parser.add_argument('--resume', type=int, default=0)
 parser.add_argument('--save_name', type=str, default='RC_Transolver')
 parser.add_argument('--data_path', type=str, default='./data')
 parser.add_argument('--log_name', type=str, default='train_log.txt')
+parser.add_argument('--resume_name', type=str, default='')
+
 args = parser.parse_args()
 eval = args.eval
 save_name = args.save_name
@@ -119,7 +122,7 @@ def main():
     myloss = TestLoss()
 
     if eval:
-        model.load_state_dict(torch.load("./checkpoints/" + save_name + ".pt"))
+        model.load_state_dict(torch.load("./checkpoints/" + save_name + ".pt"), weights_only=True)
         model.eval()
         if not os.path.exists('./results/' + save_name + '/'):
             os.makedirs('./results/' + save_name + '/')
@@ -142,6 +145,14 @@ def main():
         rel_err /= ntest
         print(f"Test Error: {rel_err:.6f}")
     else:
+        if args.resume:
+            checkpoint_path = os.path.join('./checkpoints', args.resume_name + '.pt')
+            if os.path.exists(checkpoint_path):
+                print(f"Resuming training from {checkpoint_path}")
+                model.load_state_dict(torch.load(checkpoint_path))
+            else:
+                print(f"No checkpoint found at {checkpoint_path}, training from scratch.")
+
         epoch_pbar = tqdm(range(args.epochs), desc="Training Progress", position=0)
         
         log_dir = './log'
