@@ -146,7 +146,6 @@ def main():
         rel_err /= ntest
         print(f"Test Error: {rel_err:.6f}")
     else:
-        epochs = args.epochs
         if args.resume:
             checkpoint_path = os.path.join('./checkpoints', args.resume_name + '.pt')
             checkpoint = torch.load(checkpoint_path)
@@ -154,19 +153,28 @@ def main():
                 print(f"Resuming training from {checkpoint_path}")
                 model.load_state_dict(checkpoint['model_state_dict'])
                 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-                scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                # 追加训练时，max_lr设为上次训练最后的lr
+                # 先用原参数初始化scheduler，获取current_lr
+                temp_scheduler = torch.optim.lr_scheduler.OneCycleLR(
                     optimizer,
                     max_lr=args.lr,
-                    epochs=checkpoint['epoch'] + args.epochs,
-                    steps_per_epoch=len(train_loader),
-                    last_epoch=checkpoint['epoch']
+                    epochs=checkpoint['epoch'],
+                    steps_per_epoch=len(train_loader)
+                )
+                temp_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+                current_lr = temp_scheduler.get_last_lr()[0]
+                print(f"current_lr: {current_lr}")
+                # 重新初始化新的scheduler，max_lr=current_lr
+                scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                    optimizer,
+                    max_lr=current_lr,
+                    epochs=args.epochs,
+                    steps_per_epoch=len(train_loader)
                 )
             else:
                 print(f"No checkpoint found at {checkpoint_path}, training from scratch.")
-            epoch_pbar = tqdm(range(checkpoint['epoch'], checkpoint['epoch'] + args.epochs), desc="Training Progress", position=0)
-            epochs = checkpoint['epoch'] + args.epochs
-        else:
-            epoch_pbar = tqdm(range(args.epochs), desc="Training Progress", position=0)
+        
+        epoch_pbar = tqdm(range(args.epochs), desc="Training Progress", position=0)
         
         log_dir = './log'
         if not os.path.exists(log_dir):
@@ -181,7 +189,7 @@ def main():
             model.train()
             train_loss = 0
 
-            batch_pbar = tqdm(train_loader, desc=f"Epoch {ep+1}/{epochs}", 
+            batch_pbar = tqdm(train_loader, desc=f"Epoch {ep+1}/{args.epochs}", 
                              position=1, leave=False)
             
             for x1, x2, y in batch_pbar:
@@ -219,7 +227,7 @@ def main():
                 'Test Error': f'{rel_err:.6f}',
             })
             
-            print(f"\nEpoch {ep+1}/{epochs} - Train Loss: {train_loss/len(train_loader):.6f}, Test Error: {rel_err:.6f}")
+            print(f"\nEpoch {ep+1}/{args.epochs} - Train Loss: {train_loss/len(train_loader):.6f}, Test Error: {rel_err:.6f}")
 
             if (ep + 1) % 100 == 0:
                 if not os.path.exists('./checkpoints'):
@@ -239,7 +247,7 @@ def main():
             os.makedirs('./checkpoints')
         print('save model')
         torch.save({
-            'epoch': epochs,
+            'epoch': args.epochs,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
